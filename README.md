@@ -3,3 +3,11 @@
 <!--- End of README Badges (automated) --->
 # http-data-transfer-client
 HTTP(s) data transfer client with OAuth2
+
+## Using the container
+
+Example:
+
+```
+docker run --rm -it -v /my/data/dir --network=host https://data.icecube.aq/data/user/my/file /my/data/dir/file
+```

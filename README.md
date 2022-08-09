@@ -4,6 +4,16 @@
 # http-data-transfer-client
 HTTP(s) data transfer client with OAuth2
 
+## Using directly
+
+First, set up the environment with `setupenv.sh`.  Then load it with `. env/bin/activate`.
+
+Now, copy files:
+
+```
+python -m http_data_transfer_client <src_file(s)> <dest>
+```
+
 ## Using the container
 
 Example:

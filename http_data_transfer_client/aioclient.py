@@ -36,7 +36,7 @@ class AIOClient:
         self.address = address
 
         self.chunk_size = chunk_size
-        timeout = aiohttp.ClientTimeout(total=total_timeout, connect=idle_timeout, sock_connect=idle_timeout, sock_read=idle_timeout)
+        timeout = aiohttp.ClientTimeout(total=total_timeout, connect=idle_timeout, sock_connect=idle_timeout)
         self.session = aiohttp.ClientSession(timeout=timeout, raise_for_status=True)
 
     async def __aenter__(self):

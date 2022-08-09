@@ -79,9 +79,10 @@ def get_rest_url(source_files, dest_file):
 
 async def _get_file(source, dest, rest_client=None):
     matching_dest = dest / Path(source).name if dest.is_dir() else dest
-    with open(matching_dest, 'wb') as f:
-        async for chunk in rest_client.read_iter(source):
-            f.write(chunk)
+    await rest_client.read_to_file(source, filename=matching_dest)
+    #with open(matching_dest, 'wb') as f:
+    #    async for chunk in rest_client.read_iter(source):
+    #        f.write(chunk)
 
 
 async def _put_file(source, dest, rest_client=None):
@@ -119,7 +120,7 @@ async def do_transfer(source_files, dest_file, rest_client=None):
             if dest_file.endswith('/'):
                 dest = dest + source.name
             logger.warning('put file: %s %s', source, dest)
-            tasks.append(_put_file(source, dest, rest_client=rest_client))
+            tasks.append(asyncio.create_task(_put_file(source, dest, rest_client=rest_client)))
 
     await asyncio.gather(*tasks)
 
@@ -144,6 +145,7 @@ async def main():
     parse_auth.add_argument('--auth-client-secret', default=config['AUTH_CLIENT_SECRET'], help='Auth client secret (required for refresh tokens)')
     parse_auth.add_argument('--refresh-token', default=None, help='Directly supply the refresh token to use (will not generate internally)')
     parse_misc = parser.add_argument_group('Misc')
+    parse_misc.add_argument('--range-size', default=None, type=int, help='Min range size, for range requests')
     parse_misc.add_argument('--total-timeout', default=config['TIMEOUT'], type=int, help='Transfer total timeout')
     parse_misc.add_argument('--idle-timeout', default=config['IDLE_TIMEOUT'], type=int, help='Transfer idle timeout')
     parse_misc.add_argument('--debug', type=bool, default=config['DEBUG'], help='Enable/disable debugging')
@@ -195,6 +197,8 @@ async def main():
         'total_timeout': args.total_timeout,
         'idle_timeout': args.idle_timeout,
     }
+    if args.range_size:
+        rc_kwargs['range_size'] = args.range_size
     if refresh_token:
         logger.info('have refresh token - using OIDC client')
         rc_kwargs.update({

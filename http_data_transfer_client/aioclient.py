@@ -1,5 +1,9 @@
 import asyncio
+from copy import deepcopy
 import logging
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import time
 from typing import Any, BinaryIO, Callable, Dict, Iterable, Optional, Union
 
@@ -28,6 +32,7 @@ class AIOClient:
         self,
         address: str,
         chunk_size: int = 1024*64,
+        range_size: int = 1024*1024*64,  # 64 MB chunks
         total_timeout: float = 3600.0,
         idle_timeout: float = 60.0,
         retries: int = 2,
@@ -36,6 +41,7 @@ class AIOClient:
         self.address = address
 
         self.chunk_size = chunk_size
+        self.range_size = range_size
         timeout = aiohttp.ClientTimeout(total=total_timeout, connect=idle_timeout, sock_connect=idle_timeout)
         self.session = aiohttp.ClientSession(timeout=timeout, raise_for_status=True)
 
@@ -66,12 +72,77 @@ class AIOClient:
     async def read_iter(self, route: str) -> Iterable[bytes]:
         kwargs = await self._prepare(route)
         async with self.session.get(**kwargs) as resp:
+            logger.debug('headers: %r', resp.headers)
             async for chunk in resp.content.iter_chunked(self.chunk_size):
                 yield chunk
 
+    async def _read_to_file_helper(self, filename: str, **kwargs) -> None:
+        with open(filename, 'wb') as f:
+            async with self.session.get(**kwargs) as resp:
+                #logger.debug('headers: %r', resp.headers)
+                async for chunk in resp.content.iter_chunked(self.chunk_size):
+                    f.write(chunk)
+
+    async def read_to_file(self, route: str, filename: str) -> None:
+        kwargs = await self._prepare(route)
+        ranges = None
+        async with self.session.head(**kwargs) as resp:
+            logger.debug('headers: %r', resp.headers)
+            if resp.headers.get('Accept-Ranges', None) == 'bytes':
+                size = int(resp.headers.get('Content-Length', 0))
+                if size > self.range_size:
+                    ranges = []
+                    range_size = size//100 if size > 100*self.range_size else self.range_size
+                    i = 0
+                    while i < size:
+                        end = i+range_size-1
+                        if end >= size:
+                            end = size-1
+                        ranges.append((i, end))
+                        i += range_size
+
+        if not ranges:
+            logger.info('read_to_file: standard download')
+            await self._read_to_file_helper(filename, **kwargs)
+        else:
+            logger.info('read_to_file: %d ranges', len(ranges))
+            async def get_part(args):
+                await asyncio.create_task(self._read_to_file_helper(args['filename'], **args['task_args']))
+                return args
+
+            with open(filename, 'wb') as outfile, TemporaryDirectory() as tmpdir:
+                tasks = set()
+                for i, (begin, end) in enumerate(ranges):
+                    task_args = deepcopy(kwargs)
+                    task_args['headers']['Range'] = f'bytes={begin}-{end}'
+                    tmpfilename = Path(tmpdir) / f'{i}.part'
+                    args = {
+                        'index': i,
+                        'range': (begin, end),
+                        'filename': tmpfilename,
+                        'task_args': task_args,
+                    }
+                    tasks.add(asyncio.create_task(get_part(args)))
+                while tasks:
+                    done, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                    logger.info('reading ranges, %d of %d complete', len(ranges)-len(tasks), len(ranges))
+                    for t in done:
+                        ret = await t
+                        logger.debug('processing part %d: %r', ret['index'], ret['range'])
+                        begin, end = ret['range']
+                        if end-begin+1 != os.path.getsize(ret['filename']):
+                            logger.debug('range size mismatch: asked for %d bytes, received %d bytes', end-begin+1, os.path.getsize(ret['filename']))
+                            raise Exception(f'part {ret["index"]} is incomplete')
+                        outfile.seek(begin)
+                        with open(ret['filename'], 'rb') as f:
+                            while chunk := f.read(self.chunk_size):
+                                outfile.write(chunk)
+                        outfile.flush()
+
     async def write_iter(self, route: str, data: Union[bytes, BinaryIO]) -> None:
         kwargs = await self._prepare(route)
-        await self.session.put(data=data, **kwargs)
+        async with self.session.put(data=data, **kwargs) as resp:
+            logger.debug('headers: %r', resp.headers)
 
 
 class AIO_Token_Client(AIOClient):

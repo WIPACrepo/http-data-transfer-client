@@ -39,7 +39,7 @@ class Main(RestHandler):
         self.write('Login successful. Return to terminal.')
 
 
-def _port():
+def get_ephemeral_port():
     """Get an ephemeral port number."""
     # https://unix.stackexchange.com/a/132524
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -82,7 +82,7 @@ def create_server(state, oidc_url, client_id, client_secret=None):
     login_args.update(kwargs)
 
     host = 'localhost'
-    port = _port()
+    port = get_ephemeral_port()
     address = f'http://{host}:{port}'
 
     server = RestServer(debug=config['DEBUG'], cookie_secret=config['COOKIE_SECRET'],

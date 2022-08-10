@@ -52,6 +52,23 @@ jobs:
           pip install --upgrade pip wheel setuptools
           pip install .
 
+  py-unit-tests:
+    needs: [py-versions]
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 4
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.py-versions.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.py3_versions }}
+      - run: |
+          pip install --upgrade pip wheel setuptools
+          pip install .[tests]
+          python -m pytest tests --tb=short
+
 #  py-tests:
 #    needs: [py-versions]
 #    runs-on: ubuntu-latest

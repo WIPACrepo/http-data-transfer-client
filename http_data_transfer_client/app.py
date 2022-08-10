@@ -62,27 +62,35 @@ def load_tokens():
     return access_token, refresh_token
 
 
-def get_rest_url(source_files, dest_file):
-    source_http = any(f.startswith('https://') for f in source_files)
-    dest_http = dest_file.startswith('https://')
-
-    if (not source_http) and not dest_http:
-        raise RuntimeError('Neither a source or a dest is an https address!')
-    elif source_http and dest_http:
-        raise RuntimeError('Both source and dest cannot be https addresses!')
-    elif source_http and not all(f.startswith('https://') for f in source_files):
-        raise RuntimeError('Not all sources are https addresses!')
-
-    url = urlparse(source_files[0] if source_http else dest_file)
+def _get_base_url(filename):
+    url = urlparse(filename)
+    if (not url.scheme) or not url.netloc:
+        return ''
     return f'{url.scheme}://{url.netloc}'
+
+
+def get_rest_url(source_files, dest_file):
+    source_urls = [_get_base_url(f) for f in source_files]
+    source_http = any(u for u in source_urls)
+    dest_url = _get_base_url(dest_file)
+
+    if (not source_http) and not dest_url:
+        raise RuntimeError('Neither a source or a dest is an http address!')
+    elif source_http and dest_url:
+        raise RuntimeError('Both source and dest cannot be http addresses!')
+    elif source_http and not all(source_urls):
+        raise RuntimeError('Not all sources are http addresses!')
+
+    base_url = source_urls[0] if source_http else dest_url
+    if source_http and not all(u == base_url for u in source_urls):
+        raise RuntimeError('Sources are from different domains!')
+
+    return base_url
 
 
 async def _get_file(source, dest, rest_client=None):
     matching_dest = dest / Path(source).name if dest.is_dir() else dest
     await rest_client.read_to_file(source, filename=matching_dest)
-    #with open(matching_dest, 'wb') as f:
-    #    async for chunk in rest_client.read_iter(source):
-    #        f.write(chunk)
 
 
 async def _put_file(source, dest, rest_client=None):
@@ -96,13 +104,14 @@ async def do_transfer(source_files, dest_file, rest_client=None):
     if rest_client is None:
         raise Exception('invalid rest client')
 
-    source_http = any(f.startswith('https://') for f in source_files)
-    dest_http = dest_file.startswith('https://')
+    source_urls = [_get_base_url(f) for f in source_files]
+    source_http = any(u for u in source_urls)
+    dest_url = _get_base_url(dest_file)
 
     # just checking that nothing snuck in from previous check
     if source_http:
-        assert not dest_http
-    if dest_http:
+        assert not dest_url
+    if dest_url:
         assert not source_http
 
     tasks = []

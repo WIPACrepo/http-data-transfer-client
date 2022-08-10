@@ -59,6 +59,7 @@ class AIOClient:
     async def _prepare(self, route: str) -> None:
         kwargs: Dict[str, Any] = {
             'url': self.address + route,
+            'headers': {},
         }
 
         token = await self._get_token()
@@ -79,7 +80,6 @@ class AIOClient:
     async def _read_to_file_helper(self, filename: str, **kwargs) -> None:
         with open(filename, 'wb') as f:
             async with self.session.get(**kwargs) as resp:
-                #logger.debug('headers: %r', resp.headers)
                 async for chunk in resp.content.iter_chunked(self.chunk_size):
                     f.write(chunk)
 

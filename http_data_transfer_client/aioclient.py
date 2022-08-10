@@ -8,7 +8,6 @@ import time
 from typing import Any, BinaryIO, Callable, Dict, Iterable, Optional, Union
 
 import aiohttp
-import jwt
 from rest_tools.utils.auth import OpenIDAuth
 
 from .auth import check_expiration, TOKEN_EXPIRE_DELAY_OFFSET
@@ -106,6 +105,7 @@ class AIOClient:
             await self._read_to_file_helper(filename, **kwargs)
         else:
             logger.info('read_to_file: %d ranges', len(ranges))
+
             async def get_part(args):
                 await asyncio.create_task(self._read_to_file_helper(args['filename'], **args['task_args']))
                 return args

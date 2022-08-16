@@ -69,37 +69,34 @@ jobs:
           pip install .[tests]
           python -m pytest tests --tb=short
 
-#  py-tests:
-#    needs: [py-versions]
-#    runs-on: ubuntu-latest
-#    services:
-#      keycloak:
-#        image: quay.io/keycloak/keycloak:10.0.2
-#        env:
-#          KEYCLOAK_USER: admin
-#          KEYCLOAK_PASSWORD: admin
-#        ports:
-#        - 8080:8080
-#      mongo:
-#        image: mongo:4.0
-#        ports:
-#        - 27017:27017
-#    env:
-#      KEYCLOAK_URL: http://localhost:8080
-#      USERNAME: admin
-#      PASSWORD: admin
-#    steps:
-#      - uses: actions/checkout@v3
-#      - uses: actions/setup-python@v3
-#        with:
-#          python-version: ${{ fromJSON(needs.py-versions.outputs.matrix).py3_versions[0] }}
-#      - name: Setup Dependencies
-#        run: |
-#          pip install --upgrade pip wheel setuptools
-#          pip install .[tests]
-#      - name: Run Tests
-#        run: |
-#          python -m pytest tests --tb=short --log-level=INFO
+  py-integration-tests:
+    needs: [py-versions]
+    runs-on: ubuntu-latest
+    services:
+      keycloak:
+        image: ghcr.io/WIPACRepo/keycloak-rest-services:test-keycloak-master
+        env:
+          KEYCLOAK_ADMIN: admin
+          KEYCLOAK_ADMIN_PASSWORD: admin
+          CMD: start-dev
+        ports:
+        - 8080:8080
+    env:
+      KEYCLOAK_URL: http://localhost:8080
+      USERNAME: admin
+      PASSWORD: admin
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+        with:
+          python-version: ${{ fromJSON(needs.py-versions.outputs.matrix).py3_versions[0] }}
+      - name: Setup Dependencies
+        run: |
+          pip install --upgrade pip wheel setuptools
+          pip install .[tests,integration]
+      - name: Run Tests
+        run: |
+          python -m pytest integration_tests --tb=short --log-level=INFO
 
 #  web-tests:
 #    needs: [py-versions]
@@ -120,7 +117,7 @@ jobs:
 
   release:
     if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
-    needs: [pip-install]
+    needs: [pip-install, py-unit-tests, py-integration-tests]
     runs-on: ubuntu-latest
     concurrency: release
     steps:
@@ -138,7 +135,7 @@ jobs:
 
   docker:
     name: "Docker Image"
-    needs: [pip-install]
+    needs: [pip-install, py-unit-tests, py-integration-tests]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Project

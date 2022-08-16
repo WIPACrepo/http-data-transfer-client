@@ -117,11 +117,11 @@ async def token_server(browser=True, **kwargs):
     logger.info('token server stopped')
 
     access_token = state.get('access_token', None)
-    if access_token:
+    if access_token and isinstance(access_token, bytes):
         access_token = access_token.decode('utf-8')
 
     refresh_token = state.get('refresh_token', None)
-    if refresh_token:
+    if refresh_token and isinstance(refresh_token, bytes):
         refresh_token = refresh_token.decode('utf-8')
 
     return access_token, refresh_token

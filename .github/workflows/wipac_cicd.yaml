@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       keycloak:
-        image: ghcr.io/WIPACRepo/keycloak-rest-services:test-keycloak-master
+        image: ghcr.io/wipacrepo/keycloak-rest-services:test-keycloak-master
         env:
           KEYCLOAK_ADMIN: admin
           KEYCLOAK_ADMIN_PASSWORD: admin
